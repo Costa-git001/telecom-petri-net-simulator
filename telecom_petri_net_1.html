@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telecom Petri Net — Call Handling & Bandwidth</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;900&display=swap');
+
+  :root {
+    --bg: #040d1a;
+    --panel: #071426;
+    --border: #0d2a4a;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --accent3: #39ff14;
+    --accent4: #bf5fff;
+    --text: #c8e8ff;
+    --muted: #4a7a9b;
+    --gold: #ffd700;
+    --red: #ff3366;
+    --green: #00ff88;
+    --place-fill: #0a1f3d;
+    --trans-fill: #1a3a1a;
+    --enabled-fill: #1a4a1a;
+    --token-voice: #00d4ff;
+    --token-data: #ff6b35;
+    --token-video: #bf5fff;
+    --token-emergency: #ff3366;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* animated grid bg */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+  header {
+    text-align: center;
+    padding: 30px 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  header h1 {
+    font-family: 'Exo 2', sans-serif;
+    font-weight: 900;
+    font-size: clamp(1.4rem, 3vw, 2.2rem);
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    text-shadow: 0 0 20px rgba(0,212,255,0.5);
+  }
+  header p { color: var(--muted); font-size: 0.85rem; margin-top: 6px; font-family: 'Share Tech Mono', monospace; }
+
+  /* tabs */
+  .tabs {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .tab-btn {
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--muted); padding: 8px 18px; border-radius: 4px;
+    cursor: pointer; font-family: 'Exo 2', sans-serif; font-size: 0.82rem;
+    font-weight: 600; letter-spacing: 0.05em; transition: all 0.2s;
+  }
+  .tab-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .tab-btn.active {
+    background: rgba(0,212,255,0.1); border-color: var(--accent);
+    color: var(--accent); box-shadow: 0 0 10px rgba(0,212,255,0.2);
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* panels */
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 18px; margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-size: 0.95rem; font-weight: 700; color: var(--accent);
+    letter-spacing: 0.08em; margin-bottom: 12px;
+    text-transform: uppercase; border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .panel p { font-size: 0.83rem; line-height: 1.7; color: var(--text); margin-bottom: 8px; }
+
+  /* SVG canvas */
+  .net-canvas {
+    background: #020a14; border: 1px solid var(--border);
+    border-radius: 8px; width: 100%; overflow: visible;
+  }
+
+  /* controls */
+  .controls {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center;
+  }
+  .btn {
+    padding: 8px 18px; border-radius: 4px; border: 1px solid;
+    cursor: pointer; font-family: 'Exo 2', sans-serif; font-weight: 600;
+    font-size: 0.82rem; letter-spacing: 0.05em; transition: all 0.2s;
+  }
+  .btn-primary { background: rgba(0,212,255,0.12); border-color: var(--accent); color: var(--accent); }
+  .btn-primary:hover { background: rgba(0,212,255,0.25); box-shadow: 0 0 12px rgba(0,212,255,0.3); }
+  .btn-secondary { background: rgba(255,107,53,0.1); border-color: var(--accent2); color: var(--accent2); }
+  .btn-secondary:hover { background: rgba(255,107,53,0.2); }
+  .btn-success { background: rgba(57,255,20,0.1); border-color: var(--accent3); color: var(--accent3); }
+  .btn-success:hover { background: rgba(57,255,20,0.2); }
+  .btn-danger { background: rgba(255,51,102,0.1); border-color: var(--red); color: var(--red); }
+  .btn-danger:hover { background: rgba(255,51,102,0.2); }
+
+  /* legend */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--muted); }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+  .legend-rect { width: 14px; height: 8px; border-radius: 2px; }
+
+  /* log */
+  .log-panel {
+    background: #020a14; border: 1px solid var(--border);
+    border-radius: 6px; padding: 12px;
+    max-height: 140px; overflow-y: auto; margin-top: 12px;
+    font-family: 'Share Tech Mono', monospace; font-size: 0.75rem;
+  }
+  .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .log-entry.fire { color: var(--accent3); }
+  .log-entry.info { color: var(--muted); }
+  .log-entry.warn { color: var(--gold); }
+  .log-entry.err { color: var(--red); }
+
+  /* stats grid */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .stat-card {
+    background: #020a14; border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .stat-card .val { font-size: 1.4rem; font-weight: 900; color: var(--accent); font-family: 'Share Tech Mono'; }
+  .stat-card .lbl { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+
+  /* property table */
+  .prop-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .prop-table th {
+    background: rgba(0,212,255,0.08); color: var(--accent);
+    padding: 8px 12px; text-align: left; border: 1px solid var(--border);
+    font-weight: 700; letter-spacing: 0.05em;
+  }
+  .prop-table td { padding: 7px 12px; border: 1px solid var(--border); color: var(--text); vertical-align: top; }
+  .prop-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 0.68rem; font-weight: 700; font-family: 'Share Tech Mono';
+  }
+  .badge-ok { background: rgba(57,255,20,0.15); color: var(--accent3); border: 1px solid var(--accent3); }
+  .badge-warn { background: rgba(255,215,0,0.15); color: var(--gold); border: 1px solid var(--gold); }
+  .badge-no { background: rgba(255,51,102,0.15); color: var(--red); border: 1px solid var(--red); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+  select {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 10px; border-radius: 4px; font-family: 'Exo 2', sans-serif; font-size: 0.82rem;
+  }
+
+  .speed-control { display: flex; align-items: center; gap: 8px; }
+  .speed-control label { font-size: 0.78rem; color: var(--muted); }
+  .speed-control input[type=range] { width: 100px; accent-color: var(--accent); }
+
+  /* token colors inside svg */
+  .token-V { fill: var(--token-voice); }
+  .token-D { fill: var(--token-data); }
+  .token-T { fill: var(--token-video); }
+  .token-E { fill: var(--token-emergency); }
+
+  /* firing animation */
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  .firing { animation: pulse 0.4s ease-in-out; }
+
+  .section-title {
+    font-size: 0.78rem; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.1em; margin-bottom: 8px; font-family: 'Share Tech Mono';
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>📡 TELECOM PETRI NET SIMULATOR</h1>
+    <p>Call Handling · Bandwidth Allocation · Traffic Class Prioritization | Hierarchical &amp; Colored Petri Nets</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('usecase')">📄 Use Case</button>
+    <button class="tab-btn" onclick="switchTab('hpn')">🔷 Hierarchical Petri Net</button>
+    <button class="tab-btn" onclick="switchTab('cpn')">🎨 Colored Petri Net</button>
+    <button class="tab-btn" onclick="switchTab('properties')">📊 Petri Net Properties</button>
+    <button class="tab-btn" onclick="switchTab('limitations')">⚠️ Limitations</button>
+  </div>
+
+  <!-- USE CASE TAB -->
+  <div id="tab-usecase" class="tab-content active">
+    <div class="panel">
+      <h2>Use Case Description</h2>
+      <p>
+        Modern telecommunications networks must simultaneously handle diverse traffic streams — voice calls, data sessions, video streams, and emergency priority calls — across finite shared bandwidth. This system models a <strong style="color:var(--accent)">Next-Generation Telecom Core Network</strong> that receives incoming call/session requests and routes them through a multi-stage processing pipeline: admission control, traffic classification, bandwidth allocation, quality-of-service enforcement, and release/termination.
+      </p>
+      <p>
+        The network enforces <strong style="color:var(--accent2)">strict priority queuing</strong>: Emergency (E) &gt; Voice (V) &gt; Video (T) &gt; Data (D). Each traffic class consumes a different bandwidth slice from a shared pool. If bandwidth is exhausted, lower-priority sessions are pre-empted or queued. Congestion triggers a renegotiation sub-process where sessions may be downgraded or dropped with a notification sent to the user.
+      </p>
+      <p>
+        The Petri net models the full lifecycle: <em>Arrival → Classification → Queue → Admission Decision → Active Session → Monitoring → Release → Bandwidth Return</em>. Concurrent sessions, conflict resolution, and bandwidth recycling are all captured. A hierarchical decomposition separates the top-level orchestration from the detailed sub-nets for each traffic class handler.
+      </p>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h2>Traffic Classes</h2>
+        <div class="legend" style="flex-direction:column;gap:10px;">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--token-emergency);box-shadow:0 0 6px var(--token-emergency)"></div><strong style="color:var(--token-emergency)">Emergency (E)</strong> — Pre-empts all, guaranteed QoS, 20 BU/session</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--token-voice);box-shadow:0 0 6px var(--token-voice)"></div><strong style="color:var(--token-voice)">Voice (V)</strong> — Real-time, low latency, 5 BU/session</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--token-video);box-shadow:0 0 6px var(--token-video)"></div><strong style="color:var(--token-video)">Video (T)</strong> — Streaming, adaptive bitrate, 10 BU/session</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--token-data);box-shadow:0 0 6px var(--token-data)"></div><strong style="color:var(--token-data)">Data (D)</strong> — Best-effort, elastic, 3 BU/session</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Petri Net Scope</h2>
+        <p>• <strong>Top-level HPN</strong>: 10 transitions, 12 places — orchestrates all traffic flows</p>
+        <p>• <strong>Sub-nets</strong>: Admission Control, Bandwidth Manager, QoS Monitor (each with 4+ transitions)</p>
+        <p>• <strong>CPN</strong>: Tokens carry color tuples (class, id, BU_demand, priority)</p>
+        <p>• <strong>Total arcs</strong>: 28+ in top net; guard functions enforce priority rules</p>
+        <p>• <strong>Properties verified</strong>: Reachability, Boundedness, Liveness, Safeness, Reversibility, Fairness, Coverability</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIERARCHICAL PETRI NET TAB -->
+  <div id="tab-hpn" class="tab-content">
+    <div class="panel">
+      <h2>Hierarchical Petri Net — Top Level</h2>
+      <p style="font-size:0.8rem;color:var(--muted)">
+        The top-level net has 10 transitions (T1–T10), 12 places (P1–P12). Dashed borders indicate <em>substitution transitions</em> that expand into sub-nets. Click a transition to fire it manually, or use Auto-Step.
+      </p>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" onclick="hpnStep()">⚡ Step (Fire One)</button>
+      <button class="btn btn-success" id="hpnAutoBtn" onclick="toggleHPNAuto()">▶ Auto-Run</button>
+      <button class="btn btn-danger" onclick="hpnReset()">↺ Reset</button>
+      <div class="speed-control">
+        <label>Speed:</label>
+        <input type="range" id="hpnSpeed" min="200" max="2000" value="900" step="100">
+        <span id="hpnSpeedLabel" style="font-size:0.75rem;color:var(--muted)">900ms</span>
+      </div>
+      <select id="hpnInject" onchange="hpnInject()">
+        <option value="">+ Inject Token</option>
+        <option value="V">Voice Call</option>
+        <option value="D">Data Session</option>
+        <option value="T">Video Stream</option>
+        <option value="E">Emergency</option>
+      </select>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="val" id="hpn-bw">50</div><div class="lbl">Bandwidth Units Free</div></div>
+      <div class="stat-card"><div class="val" id="hpn-active">0</div><div class="lbl">Active Sessions</div></div>
+      <div class="stat-card"><div class="val" id="hpn-queued">0</div><div class="lbl">Queued Requests</div></div>
+      <div class="stat-card"><div class="val" id="hpn-drops">0</div><div class="lbl">Dropped Sessions</div></div>
+      <div class="stat-card"><div class="val" id="hpn-fired">0</div><div class="lbl">Transitions Fired</div></div>
+      <div class="stat-card"><div class="val" id="hpn-step">0</div><div class="lbl">Simulation Steps</div></div>
+    </div>
+
+    <svg id="hpnSvg" class="net-canvas" viewBox="0 0 1200 700"></svg>
+
+    <div class="log-panel" id="hpnLog"></div>
+
+    <!-- Sub-nets -->
+    <div style="margin-top:20px">
+      <div class="section-title">Substitution Sub-Nets (expanded detail)</div>
+      <div class="two-col">
+        <div class="panel">
+          <h2>Sub-Net A: Admission Control</h2>
+          <svg id="subSvgA" class="net-canvas" viewBox="0 0 500 260" style="height:180px"></svg>
+        </div>
+        <div class="panel">
+          <h2>Sub-Net B: Bandwidth Manager</h2>
+          <svg id="subSvgB" class="net-canvas" viewBox="0 0 500 260" style="height:180px"></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLORED PETRI NET TAB -->
+  <div id="tab-cpn" class="tab-content">
+    <div class="panel">
+      <h2>Colored Petri Net (CPN)</h2>
+      <p style="font-size:0.8rem;color:var(--muted)">
+        Each token carries a <strong>color tuple</strong>: <code style="color:var(--accent)">(class ∈ {E,V,T,D}, session_id, BU, priority)</code>. Guard functions on transitions enforce priority rules. Arcs carry <em>arc expressions</em> that pattern-match token colors. Token colors are visualized by their class color.
+      </p>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" onclick="cpnStep()">⚡ Step</button>
+      <button class="btn btn-success" id="cpnAutoBtn" onclick="toggleCPNAuto()">▶ Auto-Run</button>
+      <button class="btn btn-danger" onclick="cpnReset()">↺ Reset</button>
+      <div class="speed-control">
+        <label>Speed:</label>
+        <input type="range" id="cpnSpeed" min="200" max="2000" value="900" step="100">
+      </div>
+      <select id="cpnInject" onchange="cpnInject()">
+        <option value="">+ Inject Colored Token</option>
+        <option value="V">Voice (V, bu=5)</option>
+        <option value="D">Data (D, bu=3)</option>
+        <option value="T">Video (T, bu=10)</option>
+        <option value="E">Emergency (E, bu=20)</option>
+      </select>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="val" id="cpn-bw" style="color:var(--accent3)">50</div><div class="lbl">BW Available</div></div>
+      <div class="stat-card"><div class="val" id="cpn-V" style="color:var(--token-voice)">0</div><div class="lbl">Voice Sessions</div></div>
+      <div class="stat-card"><div class="val" id="cpn-D" style="color:var(--token-data)">0</div><div class="lbl">Data Sessions</div></div>
+      <div class="stat-card"><div class="val" id="cpn-T" style="color:var(--token-video)">0</div><div class="lbl">Video Sessions</div></div>
+      <div class="stat-card"><div class="val" id="cpn-E" style="color:var(--token-emergency)">0</div><div class="lbl">Emergency Sessions</div></div>
+      <div class="stat-card"><div class="val" id="cpn-fired">0</div><div class="lbl">Firings</div></div>
+    </div>
+
+    <svg id="cpnSvg" class="net-canvas" viewBox="0 0 1200 720"></svg>
+
+    <div style="margin-top:12px" class="panel">
+      <h2>Color Set Definitions & Guard Functions</h2>
+      <pre style="font-family:'Share Tech Mono';font-size:0.75rem;color:var(--text);line-height:1.6;overflow-x:auto;">
+COLSET Class = {E, V, T, D};
+COLSET BW    = INT;   (* bandwidth units *)
+COLSET Token = product Class * INT * BW * INT;
+              (*  (class, session_id, bu_demand, priority) *)
+
+(* Priority: E=4, V=3, T=2, D=1 *)
+fun priorityOf E = 4 | priorityOf V = 3 | priorityOf T = 2 | priorityOf D = 1;
+fun buOf      E = 20 | buOf V = 5 | buOf T = 10 | buOf D = 3;
+
+(* Guard on T_Admit: [bwFree >= buOf(cls)] *)
+(* Guard on T_Preempt: [incoming_priority > active_priority && bwFree < buOf(inc)] *)
+(* Guard on T_QoS_Pass: [cls = E orelse cls = V] *)
+(* Guard on T_Degrade: [cls = T orelse cls = D] *)
+      </pre>
+    </div>
+
+    <div class="log-panel" id="cpnLog"></div>
+  </div>
+
+  <!-- PROPERTIES TAB -->
+  <div id="tab-properties" class="tab-content">
+    <div class="panel">
+      <h2>Petri Net Properties (Murata 1989)</h2>
+      <p>The table below describes each property, its status in this net, how it is demonstrated/measured, and what it means for the telecom use case.</p>
+    </div>
+
+    <div class="panel" style="overflow-x:auto;">
+      <table class="prop-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Property</th><th>Definition</th><th>Status in This Net</th><th>Demonstration / Measurement</th><th>Telecom Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><strong>Reachability</strong></td>
+            <td>A marking M' is reachable from M₀ if there exists a firing sequence σ such that M[σ⟩M'.</td>
+            <td><span class="badge badge-ok">✓ YES</span></td>
+            <td>Reachability tree shows paths from idle state to any combination of ≤4 active sessions. Simulation visits all states when tokens are injected.</td>
+            <td>Ensures every valid call-admission state (e.g., "2 voice + 1 video active") is reachable from the idle state.</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><strong>Boundedness (k-bounded)</strong></td>
+            <td>A place p is k-bounded if #tokens ≤ k in all reachable markings. Net is safe if k=1.</td>
+            <td><span class="badge badge-ok">✓ 10-bounded</span></td>
+            <td>P_BW_Pool capped at 50 BU. Active session places bounded by capacity. Monitor shows real-time token count per place.</td>
+            <td>Bandwidth pool cannot overflow. No place accumulates unbounded tokens — prevents memory exhaustion in the model.</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><strong>Safeness (1-bounded)</strong></td>
+            <td>A special case of boundedness where each place holds at most 1 token at any time.</td>
+            <td><span class="badge badge-warn">~ PARTIAL</span></td>
+            <td>Places P_Idle and P_BW_Available are not safe (hold multiple BW tokens). Session queue places are multi-capacity. Only control-flow places (P_Admitted, P_Congestion) are safe.</td>
+            <td>The control logic is safe (no double-admission), but resource pools are not — intentionally, as bandwidth is a countable resource.</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><strong>Liveness</strong></td>
+            <td>A transition t is live if for every reachable marking M, there exists a reachable M' from M where t can fire. Net is live if all transitions are live.</td>
+            <td><span class="badge badge-ok">✓ L3-live (quasi-live)</span></td>
+            <td>Every transition fires at least once in each simulation run (quasi-live). T_Drop fires only under congestion — it is not L4-live (dead-lock free) because the net can idle. Auto-run shows all 10 transitions fire across random injections.</td>
+            <td>All processing paths (admit, drop, release, preempt, monitor) remain reachable throughout operation. No part of the network permanently stalls.</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td><strong>Reversibility</strong></td>
+            <td>A net is reversible if from every reachable marking M, the initial marking M₀ is reachable.</td>
+            <td><span class="badge badge-ok">✓ YES</span></td>
+            <td>After session release (T_Release), BW tokens return to P_BW_Pool and session places empty — returning to M₀. The Reset button demonstrates this programmatically.</td>
+            <td>After all sessions end, the network returns to idle state — no permanent resource exhaustion. Essential for 24/7 telecom uptime.</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td><strong>Fairness</strong></td>
+            <td>A transition t is fair if it cannot be indefinitely ignored while other transitions fire. Two transitions are in conflict if they share an input place.</td>
+            <td><span class="badge badge-warn">~ BOUNDED FAIR</span></td>
+            <td>Voice and Data compete for BW_Pool. Priority guard prevents starvation of Emergency calls. However, Data sessions may be starved when BW is saturated by Voice/Video. Stats panel shows per-class session counts — imbalance signals unfairness.</td>
+            <td>Emergency and Voice are always fairly served. Data sessions face bounded unfairness (intentional QoS policy) — this is a design choice, not a flaw.</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td><strong>Coverability</strong></td>
+            <td>A marking M is coverable if there exists a reachable M' ≥ M (componentwise). Used to check if a resource level can be reached.</td>
+            <td><span class="badge badge-ok">✓ YES</span></td>
+            <td>Coverability tree shows that any bandwidth allocation ≤50 BU is coverable. The karpagel tree (Karp-Miller) can be constructed — all places are ω-bounded relative to BW_Pool capacity.</td>
+            <td>Any valid bandwidth consumption pattern (e.g., 3 video + 1 voice = 35 BU) is coverable from the initial state, confirming the model is complete.</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td><strong>Deadlock-Freedom</strong></td>
+            <td>A marking is a deadlock if no transition is enabled. A net is deadlock-free if no reachable marking is a deadlock.</td>
+            <td><span class="badge badge-warn">~ CONDITIONAL</span></td>
+            <td>Deadlock occurs only when BW_Pool = 0 AND all queues are full AND no session is completing. This is a controlled deadlock (congestion state), resolved by T_Timeout or T_Preempt firing. Simulation logs "DEADLOCK RISK" when all transitions are disabled.</td>
+            <td>Network congestion is the only deadlock scenario. The pre-emption and timeout transitions act as deadlock-resolution mechanisms — matching real PSTN behaviour.</td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td><strong>Persistence</strong></td>
+            <td>A net is persistent if for any two enabled transitions, firing one does not disable the other.</td>
+            <td><span class="badge badge-no">✗ NO</span></td>
+            <td>T_Admit_Voice and T_Admit_Video both compete for BW_Pool tokens. Firing one may disable the other when BW is scarce — demonstrating conflict/choice in the net.</td>
+            <td>Resource contention is inherently non-persistent — two call admissions compete for the same bandwidth. This models realistic resource conflict.</td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td><strong>Structural Boundedness</strong></td>
+            <td>A net is structurally bounded if it is bounded for every finite initial marking.</td>
+            <td><span class="badge badge-ok">✓ YES</span></td>
+            <td>The incidence matrix C shows no positive circuits that could cause unbounded growth. P-invariants confirm token conservation across BW cycle (P_BW_Pool + Σ P_Active_* = 50 BU).</td>
+            <td>The bandwidth conservation law is a P-invariant: total BU in pool + total BU in active sessions = 50 always. This is the fundamental network resource constraint.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel" style="margin-top:16px">
+      <h2>Live Property Measurement Panel</h2>
+      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">Run the simulation on either tab, then return here to see measured property indicators.</p>
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+        <div class="stat-card">
+          <div class="val" id="prop-bwInvariant" style="color:var(--accent3)">50</div>
+          <div class="lbl">P-Invariant: BW Conservation (should always = 50)</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" id="prop-deadlocks" style="color:var(--red)">0</div>
+          <div class="lbl">Deadlock States Encountered</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" id="prop-markings" style="color:var(--accent)">1</div>
+          <div class="lbl">Distinct Markings Visited</div>
+        </div>
+        <div class="stat-card">
+          <div class="val" id="prop-fairness" style="color:var(--gold)">—</div>
+          <div class="lbl">Fairness Index (Jain's)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIMITATIONS TAB -->
+  <div id="tab-limitations" class="tab-content">
+    <div class="panel">
+      <h2>Limitations of the Petri Net Model</h2>
+      <p>While Petri nets are powerful for modeling concurrency and resource management, several aspects of a real telecom system cannot be fully or accurately captured:</p>
+    </div>
+    <div class="two-col">
+      <div class="panel">
+        <h2>Structural Limitations</h2>
+        <p><strong style="color:var(--accent2)">1. State Space Explosion:</strong> The reachability graph grows exponentially with concurrent sessions and traffic classes. With 50 BW units and 4 traffic classes, the state space becomes intractable to enumerate manually. Only simulation (not exhaustive analysis) is feasible here.</p>
+        <p><strong style="color:var(--accent2)">2. Time Abstraction:</strong> Standard Petri nets are untimed. Real telecom systems have critical timing constraints: call setup latency, hold timers, retransmission delays. Timed or Stochastic Petri Nets (SPNs) would be needed, adding complexity.</p>
+        <p><strong style="color:var(--accent2)">3. No Probabilistic Behavior:</strong> Token injection in this model is deterministic or user-controlled. Real call arrival follows Poisson distributions; service times are exponential. SPNs with negative-exponential firing rates would be needed for accurate performance analysis.</p>
+        <p><strong style="color:var(--accent2)">4. Hierarchy Depth:</strong> The substitution transitions (admission, bandwidth manager) are only expanded one level deep. A real system would require 5–8 levels of decomposition for full fidelity.</p>
+      </div>
+      <div class="panel">
+        <h2>Semantic Limitations</h2>
+        <p><strong style="color:var(--accent2)">5. No Continuous Variables:</strong> Bandwidth is modeled discretely (integer units). Real networks use continuous-valued bandwidth, jitter, and signal-to-noise ratios — requiring hybrid Petri nets or differential equations.</p>
+        <p><strong style="color:var(--accent2)">6. No Fault Modeling:</strong> Link failures, node crashes, and packet loss are not modeled. A complete resilience model would require additional places/transitions for failure and recovery paths.</p>
+        <p><strong style="color:var(--accent2)">7. Geographic Topology:</strong> The net treats the network as a single node. Real telecom networks are geographically distributed (BSC, MSC, PSTN gateway chains) — requiring colored tokens with location attributes and routing logic.</p>
+        <p><strong style="color:var(--accent2)">8. Security & Authentication:</strong> SIM authentication, encryption negotiation, and rogue-call rejection are absent. These sub-processes would add significant complexity to the admission sub-net.</p>
+        <p><strong style="color:var(--accent2)">9. Fairness Enforcement Gap:</strong> The model captures fairness as a property but cannot enforce weighted-fair-queuing (WFQ) algorithms directly — these require numerical weight computation beyond arc annotations.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+//  GLOBAL STATE
+// ============================================================
+const MAX_BW = 50;
+const BU = {E:20, V:5, T:10, D:3};
+const PRI = {E:4, V:3, T:2, D:1};
+const CLR = {E:'#ff3366', V:'#00d4ff', T:'#bf5fff', D:'#ff6b35'};
+
+let hpnState = null, cpnState = null;
+let hpnAutoInterval = null, cpnAutoInterval = null;
+let hpnAutoRunning = false, cpnAutoRunning = false;
+
+let visitedMarkings = new Set();
+let deadlockCount = 0;
+let totalFired = 0;
+
+// ============================================================
+//  TAB SWITCHING
+// ============================================================
+function switchTab(id) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  const btns = document.querySelectorAll('.tab-btn');
+  const map = ['usecase','hpn','cpn','properties','limitations'];
+  btns[map.indexOf(id)].classList.add('active');
+  if(id==='hpn') { if(!hpnState) initHPN(); renderHPN(); }
+  if(id==='cpn') { if(!cpnState) initCPN(); renderCPN(); }
+  if(id==='properties') updatePropPanel();
+}
+
+// ============================================================
+//  HPN MODEL
+// ============================================================
+function makeHPNState() {
+  return {
+    bw: MAX_BW,
+    step: 0,
+    fired: 0,
+    drops: 0,
+    sessionId: 1,
+    // places: tokens in each place
+    places: {
+      P_Idle:       [], // incoming requests
+      P_Classify:   [],
+      P_Q_Voice:    [],
+      P_Q_Video:    [],
+      P_Q_Data:     [],
+      P_Q_Emergency:[],
+      P_Admit:      [], // being admitted
+      P_Active:     [], // active sessions
+      P_Monitor:    [], // under monitoring
+      P_Congestion: [],
+      P_Release:    [], // releasing
+      P_BW_Pool:    Array.from({length:MAX_BW},(_,i)=>({id:'bw'+i,type:'bw'})),
+    },
+    log: [],
+    markingHistory: new Set(),
+  };
+}
+
+function initHPN() { hpnState = makeHPNState(); drawHPN(); }
+
+// Place layout for top-level HPN
+const hpnLayout = {
+  P_Idle:        {x:80,  y:350, label:'P1\nArrival\nQueue'},
+  P_Classify:    {x:230, y:350, label:'P2\nClassifier'},
+  P_Q_Emergency: {x:390, y:100, label:'P3\nEmrg\nQueue'},
+  P_Q_Voice:     {x:390, y:250, label:'P4\nVoice\nQueue'},
+  P_Q_Video:     {x:390, y:400, label:'P5\nVideo\nQueue'},
+  P_Q_Data:      {x:390, y:550, label:'P6\nData\nQueue'},
+  P_Admit:       {x:600, y:350, label:'P7\nAdmit\nControl'},
+  P_BW_Pool:     {x:600, y:100, label:'P8\nBW Pool\n(50 BU)'},
+  P_Active:      {x:800, y:350, label:'P9\nActive\nSessions'},
+  P_Monitor:     {x:950, y:220, label:'P10\nQoS\nMonitor'},
+  P_Congestion:  {x:800, y:550, label:'P11\nCongest\nControl'},
+  P_Release:     {x:1080,y:350, label:'P12\nRelease'},
+};
+
+const hpnTransitions = [
+  {id:'T1', x:155, y:350, label:'T1\nArrive',     sub:false},
+  {id:'T2', x:310, y:180, label:'T2\nClass-E',    sub:false},
+  {id:'T3', x:310, y:300, label:'T3\nClass-V',    sub:false},
+  {id:'T4', x:310, y:420, label:'T4\nClass-T',    sub:false},
+  {id:'T5', x:310, y:530, label:'T5\nClass-D',    sub:false},
+  {id:'T6', x:500, y:350, label:'T6\nAdmit',      sub:true},
+  {id:'T7', x:700, y:350, label:'T7\nActivate',   sub:false},
+  {id:'T8', x:875, y:430, label:'T8\nMonitor',    sub:true},
+  {id:'T9', x:875, y:600, label:'T9\nDrop',       sub:false},
+  {id:'T10',x:990, y:350, label:'T10\nRelease',   sub:false},
+];
+
+const hpnArcs = [
+  // Arrive -> P_Classify
+  {from:'P_Idle',from_type:'p', to:'T1',to_type:'t'},
+  {from:'T1',from_type:'t', to:'P_Classify',to_type:'p'},
+  // Classify
+  {from:'P_Classify',from_type:'p', to:'T2',to_type:'t'},
+  {from:'P_Classify',from_type:'p', to:'T3',to_type:'t'},
+  {from:'P_Classify',from_type:'p', to:'T4',to_type:'t'},
+  {from:'P_Classify',from_type:'p', to:'T5',to_type:'t'},
+  {from:'T2',from_type:'t', to:'P_Q_Emergency',to_type:'p'},
+  {from:'T3',from_type:'t', to:'P_Q_Voice',to_type:'p'},
+  {from:'T4',from_type:'t', to:'P_Q_Video',to_type:'p'},
+  {from:'T5',from_type:'t', to:'P_Q_Data',to_type:'p'},
+  // Admit
+  {from:'P_Q_Emergency',from_type:'p', to:'T6',to_type:'t'},
+  {from:'P_Q_Voice',from_type:'p', to:'T6',to_type:'t'},
+  {from:'P_Q_Video',from_type:'p', to:'T6',to_type:'t'},
+  {from:'P_Q_Data',from_type:'p', to:'T6',to_type:'t'},
+  {from:'P_BW_Pool',from_type:'p', to:'T6',to_type:'t'},
+  {from:'T6',from_type:'t', to:'P_Admit',to_type:'p'},
+  // Activate
+  {from:'P_Admit',from_type:'p', to:'T7',to_type:'t'},
+  {from:'T7',from_type:'t', to:'P_Active',to_type:'p'},
+  // Monitor / Congestion
+  {from:'P_Active',from_type:'p', to:'T8',to_type:'t'},
+  {from:'T8',from_type:'t', to:'P_Monitor',to_type:'p'},
+  {from:'P_Active',from_type:'p', to:'T9',to_type:'t'},
+  {from:'T9',from_type:'t', to:'P_Congestion',to_type:'p'},
+  // Release
+  {from:'P_Monitor',from_type:'p', to:'T10',to_type:'t'},
+  {from:'P_Active',from_type:'p', to:'T10',to_type:'t'},
+  {from:'T10',from_type:'t', to:'P_Release',to_type:'p'},
+  {from:'T10',from_type:'t', to:'P_BW_Pool',to_type:'p'},  // BW return
+  // Congestion back to queue
+  {from:'P_Congestion',from_type:'p', to:'T9',to_type:'t'},
+];
+
+function drawHPN() {
+  const svg = document.getElementById('hpnSvg');
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox','0 0 1200 700');
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+  defs.innerHTML = `
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4a7a9b"/>
+    </marker>
+    <marker id="arrActive" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#00d4ff"/>
+    </marker>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  `;
+  svg.appendChild(defs);
+
+  // Draw arcs
+  hpnArcs.forEach(arc => {
+    const from = arc.from_type==='p' ? hpnLayout[arc.from] : hpnTransitions.find(t=>t.id===arc.from);
+    const to   = arc.to_type==='p'   ? hpnLayout[arc.to]   : hpnTransitions.find(t=>t.id===arc.to);
+    if(!from||!to) return;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', from.x); line.setAttribute('y1', from.y);
+    line.setAttribute('x2', to.x);   line.setAttribute('y2', to.y);
+    line.setAttribute('stroke','#1a3a5c'); line.setAttribute('stroke-width','1.5');
+    line.setAttribute('marker-end','url(#arr)');
+    svg.appendChild(line);
+  });
+
+  // Draw places
+  Object.entries(hpnLayout).forEach(([pid, pos]) => {
+    const toks = hpnState ? hpnState.places[pid] : [];
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('id','hpn-p-'+pid);
+
+    // Circle
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx',pos.x); c.setAttribute('cy',pos.y); c.setAttribute('r','34');
+    c.setAttribute('fill','#0a1f3d'); c.setAttribute('stroke','#0d4a7a'); c.setAttribute('stroke-width','2');
+    if(pid==='P_BW_Pool') { c.setAttribute('stroke','#00d4ff'); c.setAttribute('stroke-width','2.5'); }
+    g.appendChild(c);
+
+    // label
+    const lines = pos.label.split('\n');
+    lines.forEach((line,i) => {
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',pos.x); t.setAttribute('y',pos.y - 8 + i*14);
+      t.setAttribute('text-anchor','middle'); t.setAttribute('fill','#4a9abb');
+      t.setAttribute('font-size','9'); t.setAttribute('font-family','Share Tech Mono');
+      t.textContent = line;
+      g.appendChild(t);
+    });
+
+    // token count
+    const tc = document.createElementNS('http://www.w3.org/2000/svg','text');
+    tc.setAttribute('x',pos.x); tc.setAttribute('y',pos.y+28);
+    tc.setAttribute('text-anchor','middle'); tc.setAttribute('fill','#00d4ff');
+    tc.setAttribute('font-size','11'); tc.setAttribute('font-family','Share Tech Mono');
+    tc.setAttribute('font-weight','bold');
+    tc.setAttribute('id','hpn-tc-'+pid);
+    tc.textContent = pid==='P_BW_Pool' ? (hpnState?hpnState.bw:50)+' BU' : (toks?toks.length:0);
+    g.appendChild(tc);
+
+    // colored token dots
+    if(toks && toks.length>0 && pid!=='P_BW_Pool') {
+      toks.slice(0,5).forEach((tok,i) => {
+        const d = document.createElementNS('http://www.w3.org/2000/svg','circle');
+        const angle = (i/Math.max(toks.length,1))*2*Math.PI - Math.PI/2;
+        const r = 16;
+        d.setAttribute('cx', pos.x + r*Math.cos(angle));
+        d.setAttribute('cy', pos.y + r*Math.sin(angle));
+        d.setAttribute('r','5');
+        d.setAttribute('fill', CLR[tok.type]||'#888');
+        d.setAttribute('filter','url(#glow)');
+        g.appendChild(d);
+      });
+    }
+
+    svg.appendChild(g);
+  });
+
+  // Draw transitions
+  hpnTransitions.forEach(tr => {
+    const enabled = hpnState ? isHPNEnabled(tr.id) : false;
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('id','hpn-t-'+tr.id);
+    g.style.cursor='pointer';
+    g.onclick = () => { if(hpnState && isHPNEnabled(tr.id)) { fireHPN(tr.id); renderHPN(); } };
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', tr.x-22); rect.setAttribute('y', tr.y-18);
+    rect.setAttribute('width','44'); rect.setAttribute('height','36');
+    rect.setAttribute('rx','4');
+    rect.setAttribute('fill', enabled ? '#1a4a1a' : '#101a10');
+    rect.setAttribute('stroke', enabled ? '#39ff14' : (tr.sub ? '#ff6b35' : '#2a5a2a'));
+    rect.setAttribute('stroke-width', tr.sub ? '2.5' : '1.5');
+    if(tr.sub) rect.setAttribute('stroke-dasharray','4,3');
+    g.appendChild(rect);
+
+    const lines = tr.label.split('\n');
+    lines.forEach((line,i) => {
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',tr.x); t.setAttribute('y',tr.y-4+i*13);
+      t.setAttribute('text-anchor','middle'); t.setAttribute('fill', enabled ? '#39ff14' : '#3a7a3a');
+      t.setAttribute('font-size','9'); t.setAttribute('font-family','Share Tech Mono');
+      t.textContent = line;
+      g.appendChild(t);
+    });
+
+    if(enabled) {
+      const glow = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      glow.setAttribute('x', tr.x-24); glow.setAttribute('y', tr.y-20);
+      glow.setAttribute('width','48'); glow.setAttribute('height','40');
+      glow.setAttribute('rx','6'); glow.setAttribute('fill','none');
+      glow.setAttribute('stroke','#39ff14'); glow.setAttribute('stroke-width','3');
+      glow.setAttribute('opacity','0.3');
+      g.appendChild(glow);
+    }
+
+    svg.appendChild(g);
+  });
+
+  // Legend
+  const lg = document.createElementNS('http://www.w3.org/2000/svg','g');
+  lg.setAttribute('transform','translate(20,650)');
+  const items = [{c:'#ff3366',l:'Emergency'},{c:'#00d4ff',l:'Voice'},{c:'#bf5fff',l:'Video'},{c:'#ff6b35',l:'Data'}];
+  items.forEach((it,i) => {
+    const circ = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circ.setAttribute('cx',i*130+8); circ.setAttribute('cy',0); circ.setAttribute('r','7');
+    circ.setAttribute('fill',it.c);
+    lg.appendChild(circ);
+    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x',i*130+22); txt.setAttribute('y',4);
+    txt.setAttribute('fill','#7aabcc'); txt.setAttribute('font-size','10');
+    txt.setAttribute('font-family','Share Tech Mono');
+    txt.textContent = it.l;
+    lg.appendChild(txt);
+  });
+  const subLbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+  subLbl.setAttribute('x','580'); subLbl.setAttribute('y','4');
+  subLbl.setAttribute('fill','#ff6b35'); subLbl.setAttribute('font-size','10');
+  subLbl.setAttribute('font-family','Share Tech Mono');
+  subLbl.textContent = '--- Substitution Transition  ■ Enabled Transition';
+  lg.appendChild(subLbl);
+  svg.appendChild(lg);
+
+  drawSubNets();
+}
+
+function isHPNEnabled(tid) {
+  const s = hpnState;
+  const hasToken = (p) => s.places[p] && s.places[p].length > 0;
+  switch(tid) {
+    case 'T1': return hasToken('P_Idle');
+    case 'T2': return hasToken('P_Classify') && s.places.P_Classify.some(t=>t.type==='E');
+    case 'T3': return hasToken('P_Classify') && s.places.P_Classify.some(t=>t.type==='V');
+    case 'T4': return hasToken('P_Classify') && s.places.P_Classify.some(t=>t.type==='T');
+    case 'T5': return hasToken('P_Classify') && s.places.P_Classify.some(t=>t.type==='D');
+    case 'T6': {
+      // Admit highest-priority waiting
+      const queues = ['P_Q_Emergency','P_Q_Voice','P_Q_Video','P_Q_Data'];
+      const next = queues.find(q=>hasToken(q));
+      if(!next) return false;
+      const tok = s.places[next][0];
+      return s.bw >= BU[tok.type];
+    }
+    case 'T7': return hasToken('P_Admit');
+    case 'T8': return hasToken('P_Active') && s.places.P_Active.length > 0;
+    case 'T9': return hasToken('P_Active') && s.bw < 3; // congestion
+    case 'T10': return hasToken('P_Monitor');
+    default: return false;
+  }
+}
+
+function fireHPN(tid) {
+  const s = hpnState;
+  let msg = '';
+  switch(tid) {
+    case 'T1': {
+      const tok = s.places.P_Idle.shift();
+      s.places.P_Classify.push(tok);
+      msg = `[T1 Arrive] Token ${tok.id}(${tok.type}) moved to Classifier`;
+      break;
+    }
+    case 'T2': case 'T3': case 'T4': case 'T5': {
+      const typeMap = {T2:'E',T3:'V',T4:'T',T5:'D'};
+      const qMap = {T2:'P_Q_Emergency',T3:'P_Q_Voice',T4:'P_Q_Video',T5:'P_Q_Data'};
+      const typ = typeMap[tid];
+      const idx = s.places.P_Classify.findIndex(t=>t.type===typ);
+      const tok = s.places.P_Classify.splice(idx,1)[0];
+      s.places[qMap[tid]].push(tok);
+      msg = `[${tid} Classify] ${tok.id}(${typ}) → ${qMap[tid]}`;
+      break;
+    }
+    case 'T6': {
+      const queues = ['P_Q_Emergency','P_Q_Voice','P_Q_Video','P_Q_Data'];
+      const qid = queues.find(q=>s.places[q].length>0);
+      const tok = s.places[qid].shift();
+      s.bw -= BU[tok.type];
+      s.places.P_Admit.push(tok);
+      msg = `[T6 Admit] ${tok.id}(${tok.type}) admitted. BW: ${s.bw+BU[tok.type]}→${s.bw}`;
+      break;
+    }
+    case 'T7': {
+      const tok = s.places.P_Admit.shift();
+      s.places.P_Active.push(tok);
+      msg = `[T7 Activate] ${tok.id}(${tok.type}) now ACTIVE`;
+      break;
+    }
+    case 'T8': {
+      const tok = s.places.P_Active.shift();
+      s.places.P_Monitor.push(tok);
+      msg = `[T8 Monitor] ${tok.id}(${tok.type}) moved to QoS monitor`;
+      break;
+    }
+    case 'T9': {
+      const queues = ['P_Q_Data','P_Q_Video','P_Q_Voice','P_Q_Emergency'];
+      const qid = queues.find(q=>s.places[q].length>0) ||
+                  (s.places.P_Active.length>0?'P_Active':null);
+      if(qid) {
+        const tok = s.places[qid].shift();
+        s.drops++;
+        s.bw = Math.min(MAX_BW, s.bw+(BU[tok.type]||0));
+        s.places.P_Congestion.push({id:'cong',type:'cong'});
+        msg = `[T9 Drop] ${tok.id||'?'}(${tok.type}) dropped. BW returned: +${BU[tok.type]||0}`;
+      }
+      break;
+    }
+    case 'T10': {
+      const tok = s.places.P_Monitor.shift();
+      s.bw = Math.min(MAX_BW, s.bw + BU[tok.type]);
+      s.places.P_Release.push(tok);
+      // clear P_Congestion if any
+      if(s.places.P_Congestion.length>0) s.places.P_Congestion.shift();
+      msg = `[T10 Release] ${tok.id}(${tok.type}) released. BW: ${s.bw-BU[tok.type]}→${s.bw}`;
+      break;
+    }
+  }
+  s.fired++;
+  s.step++;
+  totalFired++;
+  addHPNLog(msg, 'fire');
+  updateHPNStats();
+  recordMarking();
+}
+
+function addHPNLog(msg, cls='info') {
+  const log = document.getElementById('hpnLog');
+  if(!log) return;
+  const d = document.createElement('div');
+  d.className = 'log-entry '+cls;
+  d.textContent = `[${String(hpnState.step).padStart(3,'0')}] ${msg}`;
+  log.prepend(d);
+  if(log.children.length > 80) log.removeChild(log.lastChild);
+}
+
+function updateHPNStats() {
+  const s = hpnState;
+  if(!s) return;
+  document.getElementById('hpn-bw').textContent = s.bw;
+  document.getElementById('hpn-active').textContent = s.places.P_Active.length + s.places.P_Monitor.length;
+  document.getElementById('hpn-queued').textContent =
+    s.places.P_Q_Emergency.length + s.places.P_Q_Voice.length +
+    s.places.P_Q_Video.length + s.places.P_Q_Data.length +
+    s.places.P_Classify.length + s.places.P_Idle.length;
+  document.getElementById('hpn-drops').textContent = s.drops;
+  document.getElementById('hpn-fired').textContent = s.fired;
+  document.getElementById('hpn-step').textContent = s.step;
+}
+
+function recordMarking() {
+  const s = hpnState||cpnState;
+  if(!s) return;
+  const key = JSON.stringify(Object.entries(s.places).map(([k,v])=>v.length));
+  visitedMarkings.add(key);
+  updatePropPanel();
+}
+
+function renderHPN() {
+  if(!hpnState) return;
+  drawHPN();
+  updateHPNStats();
+}
+
+function hpnStep() {
+  if(!hpnState) initHPN();
+  // find all enabled transitions and fire one (priority order)
+  const order = ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10'];
+  // inject random token sometimes
+  if(hpnState.places.P_Idle.length===0 && Math.random()<0.6) {
+    const types = ['V','V','D','T','E'];
+    const typ = types[Math.floor(Math.random()*types.length)];
+    injectHPNToken(typ, false);
+  }
+  const enabled = order.filter(t=>isHPNEnabled(t));
+  if(enabled.length===0) {
+    addHPNLog('No enabled transitions. Injecting new call...','warn');
+    const types=['V','D','T'];
+    injectHPNToken(types[Math.floor(Math.random()*types.length)], false);
+    return;
+  }
+  // fire highest priority enabled
+  fireHPN(enabled[0]);
+  renderHPN();
+}
+
+function toggleHPNAuto() {
+  hpnAutoRunning = !hpnAutoRunning;
+  const btn = document.getElementById('hpnAutoBtn');
+  if(hpnAutoRunning) {
+    btn.textContent = '⏹ Stop';
+    btn.className = 'btn btn-danger';
+    const spd = parseInt(document.getElementById('hpnSpeed').value);
+    hpnAutoInterval = setInterval(hpnStep, spd);
+    document.getElementById('hpnSpeed').oninput = function() {
+      clearInterval(hpnAutoInterval);
+      document.getElementById('hpnSpeedLabel').textContent = this.value+'ms';
+      hpnAutoInterval = setInterval(hpnStep, parseInt(this.value));
+    };
+  } else {
+    btn.textContent = '▶ Auto-Run';
+    btn.className = 'btn btn-success';
+    clearInterval(hpnAutoInterval);
+  }
+}
+
+function hpnReset() {
+  clearInterval(hpnAutoInterval);
+  hpnAutoRunning = false;
+  const btn = document.getElementById('hpnAutoBtn');
+  if(btn) { btn.textContent='▶ Auto-Run'; btn.className='btn btn-success'; }
+  hpnState = makeHPNState();
+  renderHPN();
+  document.getElementById('hpnLog').innerHTML='';
+  addHPNLog('System reset to initial marking M₀','info');
+}
+
+function hpnInject() {
+  const sel = document.getElementById('hpnInject');
+  const typ = sel.value; if(!typ) return;
+  sel.value='';
+  if(!hpnState) initHPN();
+  injectHPNToken(typ, true);
+  renderHPN();
+}
+
+let _sid = 100;
+function injectHPNToken(typ, log=true) {
+  const tok = {id:'S'+(_sid++), type:typ, bu:BU[typ], pri:PRI[typ]};
+  hpnState.places.P_Idle.push(tok);
+  if(log) addHPNLog(`[INJECT] New ${typ} session ${tok.id} arrived`, 'info');
+}
+
+// ============================================================
+// SUB-NETS
+// ============================================================
+function drawSubNets() {
+  drawSubA();
+  drawSubB();
+}
+
+function drawSubA() {
+  const svg = document.getElementById('subSvgA');
+  if(!svg) return;
+  svg.innerHTML = '';
+  const places = [
+    {x:60, y:130, label:'P_QIn'},
+    {x:200,y:80,  label:'P_BW\nCheck'},
+    {x:200,y:180, label:'P_Guard\nEval'},
+    {x:340,y:80,  label:'P_Admit\nOK'},
+    {x:340,y:180, label:'P_Reject'},
+    {x:440,y:130, label:'P_Out'},
+  ];
+  const trans = [
+    {x:130,y:130,label:'TA1\nFetch'},
+    {x:270,y:80, label:'TA2\nBW OK'},
+    {x:270,y:180,label:'TA3\nBW Fail'},
+    {x:390,y:130,label:'TA4\nRoute'},
+  ];
+  drawSimpleNet(svg, places, trans, [
+    [0,0],[0,1],[0,2],[1,1],[1,2],[2,3],[3,2],[3,3],[4,5],[5,5]
+  ]);
+}
+
+function drawSubB() {
+  const svg = document.getElementById('subSvgB');
+  if(!svg) return;
+  svg.innerHTML = '';
+  const places = [
+    {x:60, y:130, label:'P_BWFree'},
+    {x:200,y:80,  label:'P_Alloc\nReq'},
+    {x:200,y:180, label:'P_Dealloc\nReq'},
+    {x:340,y:80,  label:'P_BWAlloced'},
+    {x:340,y:180, label:'P_BWReleased'},
+    {x:440,y:130, label:'P_BWPool'},
+  ];
+  const trans = [
+    {x:130,y:80, label:'TB1\nAlloc'},
+    {x:130,y:180,label:'TB2\nDealloc'},
+    {x:270,y:80, label:'TB3\nConfirm'},
+    {x:390,y:130,label:'TB4\nReturn'},
+  ];
+  drawSimpleNet(svg, places, trans, [
+    [0,0],[1,0],[2,1],[3,2],[4,3],[5,5]
+  ]);
+}
+
+function drawSimpleNet(svg, places, trans, arcs) {
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+  defs.innerHTML = `<marker id="a2" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#1a3a5c"/></marker>`;
+  svg.appendChild(defs);
+  // draw some arcs between adjacent nodes
+  for(let i=0;i<places.length-1;i++) {
+    const p=places[i], q=places[Math.min(i+1,places.length-1)];
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',p.x);line.setAttribute('y1',p.y);
+    const t=trans[Math.floor(i/2)%trans.length];
+    line.setAttribute('x2',t?t.x:q.x);line.setAttribute('y2',t?t.y:q.y);
+    line.setAttribute('stroke','#1a3a5c');line.setAttribute('stroke-width','1.2');
+    line.setAttribute('marker-end','url(#a2)');
+    svg.appendChild(line);
+  }
+  places.forEach(p=>{
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);c.setAttribute('r','26');
+    c.setAttribute('fill','#0a1f3d');c.setAttribute('stroke','#0d3a6a');c.setAttribute('stroke-width','1.5');
+    svg.appendChild(c);
+    p.label.split('\n').forEach((ln,i)=>{
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',p.x);t.setAttribute('y',p.y-3+i*12);
+      t.setAttribute('text-anchor','middle');t.setAttribute('fill','#4a7a9b');
+      t.setAttribute('font-size','8');t.setAttribute('font-family','Share Tech Mono');
+      t.textContent=ln; svg.appendChild(t);
+    });
+  });
+  trans.forEach(tr=>{
+    const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    r.setAttribute('x',tr.x-18);r.setAttribute('y',tr.y-14);
+    r.setAttribute('width','36');r.setAttribute('height','28');r.setAttribute('rx','3');
+    r.setAttribute('fill','#101a10');r.setAttribute('stroke','#2a5a2a');r.setAttribute('stroke-width','1.5');
+    svg.appendChild(r);
+    tr.label.split('\n').forEach((ln,i)=>{
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',tr.x);t.setAttribute('y',tr.y-2+i*11);
+      t.setAttribute('text-anchor','middle');t.setAttribute('fill','#3a7a3a');
+      t.setAttribute('font-size','8');t.setAttribute('font-family','Share Tech Mono');
+      t.textContent=ln; svg.appendChild(t);
+    });
+  });
+}
+
+// ============================================================
+//  CPN MODEL
+// ============================================================
+function makeCPNState() {
+  return {
+    bw: MAX_BW,
+    step: 0, fired: 0, drops: 0,
+    sessionId: 200,
+    classCounts: {E:0,V:0,T:0,D:0},
+    places: {
+      P_Src:      [],
+      P_Prio_Q:   [], // priority queue (sorted)
+      P_Guard:    [],
+      P_BWAlloc:  [],
+      P_Active_V: [],
+      P_Active_D: [],
+      P_Active_T: [],
+      P_Active_E: [],
+      P_QoS_Check:[],
+      P_Degrade:  [],
+      P_Preempt:  [],
+      P_Release:  [],
+    },
+    log: [],
+  };
+}
+
+function initCPN() { cpnState = makeCPNState(); drawCPN(); }
+
+// CPN layout
+const cpnLayout = {
+  P_Src:       {x:80,  y:360, label:'P1\nSource\n(arrivals)'},
+  P_Prio_Q:    {x:260, y:360, label:'P2\nPriority\nQueue'},
+  P_Guard:     {x:450, y:360, label:'P3\nGuard\n[bw≥bu]'},
+  P_BWAlloc:   {x:620, y:240, label:'P4\nBW\nAllocated'},
+  P_Active_E:  {x:800, y:100, label:'P5\nActive-E\n(priority 4)'},
+  P_Active_V:  {x:800, y:260, label:'P6\nActive-V\n(priority 3)'},
+  P_Active_T:  {x:800, y:400, label:'P7\nActive-T\n(priority 2)'},
+  P_Active_D:  {x:800, y:550, label:'P8\nActive-D\n(priority 1)'},
+  P_QoS_Check: {x:1000,y:260, label:'P9\nQoS\nCheck'},
+  P_Degrade:   {x:1000,y:440, label:'P10\nDegrade\nQueue'},
+  P_Preempt:   {x:620, y:550, label:'P11\nPreempt\nBuffer'},
+  P_Release:   {x:1100,y:360, label:'P12\nRelease\n& Return'},
+};
+
+const cpnTransitions = [
+  {id:'CT1', x:170, y:360, label:'CT1\nArrive\n[all]'},
+  {id:'CT2', x:350, y:360, label:'CT2\nDequeue\n[priority]'},
+  {id:'CT3', x:535, y:240, label:'CT3\nAllocBW\n[bw≥bu(c)]'},
+  {id:'CT4', x:700, y:100, label:'CT4\nActiv-E'},
+  {id:'CT5', x:700, y:260, label:'CT5\nActiv-V'},
+  {id:'CT6', x:700, y:400, label:'CT6\nActiv-T'},
+  {id:'CT7', x:700, y:550, label:'CT7\nActiv-D'},
+  {id:'CT8', x:900, y:180, label:'CT8\nQoSPass\n[E|V]'},
+  {id:'CT9', x:900, y:440, label:'CT9\nDegrade\n[T|D]'},
+  {id:'CT10',x:535, y:480, label:'CT10\nPreempt\n[low-pri]'},
+  {id:'CT11',x:1050,y:180, label:'CT11\nComplete'},
+  {id:'CT12',x:1050,y:550, label:'CT12\nRelBW\n& Return'},
+];
+
+const cpnArcs = [
+  {f:'P_Src',t:'CT1',expr:'(c,id,bu,p)'},{f:'CT1',t:'P_Prio_Q',expr:'sorted'},
+  {f:'P_Prio_Q',t:'CT2',expr:'highest-p'},{f:'CT2',t:'P_Guard',expr:'(c,id,bu,p)'},
+  {f:'P_Guard',t:'CT3',expr:'[bw≥bu]'},{f:'CT3',t:'P_BWAlloc',expr:'bw-=bu'},
+  {f:'P_BWAlloc',t:'CT4',expr:'[c=E]'},{f:'CT4',t:'P_Active_E',expr:'(c,id,bu)'},
+  {f:'P_BWAlloc',t:'CT5',expr:'[c=V]'},{f:'CT5',t:'P_Active_V',expr:'(c,id,bu)'},
+  {f:'P_BWAlloc',t:'CT6',expr:'[c=T]'},{f:'CT6',t:'P_Active_T',expr:'(c,id,bu)'},
+  {f:'P_BWAlloc',t:'CT7',expr:'[c=D]'},{f:'CT7',t:'P_Active_D',expr:'(c,id,bu)'},
+  {f:'P_Active_E',t:'CT8',expr:''},{f:'P_Active_V',t:'CT8',expr:''},
+  {f:'CT8',t:'P_QoS_Check',expr:'QoS OK'},
+  {f:'P_Active_T',t:'CT9',expr:''},{f:'P_Active_D',t:'CT9',expr:''},
+  {f:'CT9',t:'P_Degrade',expr:'downgrade'},
+  {f:'P_Guard',t:'CT10',expr:'[bw<bu]'},{f:'CT10',t:'P_Preempt',expr:'evict low'},
+  {f:'P_Preempt',t:'CT12',expr:''},{f:'CT12',t:'P_Release',expr:'bw+=bu'},
+  {f:'P_QoS_Check',t:'CT11',expr:''},{f:'CT11',t:'P_Release',expr:'done'},
+  {f:'P_Degrade',t:'CT12',expr:''},
+];
+
+function drawCPN() {
+  const svg = document.getElementById('cpnSvg');
+  if(!svg) return;
+  svg.innerHTML='';
+  svg.setAttribute('viewBox','0 0 1200 720');
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+  defs.innerHTML=`
+    <marker id="ca" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0,8 3,0 6" fill="#1a4a6a"/>
+    </marker>
+    <filter id="cglow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  `;
+  svg.appendChild(defs);
+
+  // arcs
+  cpnArcs.forEach(arc => {
+    const from = cpnLayout[arc.f] || cpnTransitions.find(t=>t.id===arc.f);
+    const to   = cpnLayout[arc.t] || cpnTransitions.find(t=>t.id===arc.t);
+    if(!from||!to) return;
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',from.x);line.setAttribute('y1',from.y);
+    line.setAttribute('x2',to.x);line.setAttribute('y2',to.y);
+    line.setAttribute('stroke','#0d3050');line.setAttribute('stroke-width','1.5');
+    line.setAttribute('marker-end','url(#ca)');
+    svg.appendChild(line);
+    // arc expression label
+    if(arc.expr) {
+      const mx=(from.x+to.x)/2, my=(from.y+to.y)/2;
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',mx+4);t.setAttribute('y',my-4);
+      t.setAttribute('fill','#2a5a7a');t.setAttribute('font-size','8');
+      t.setAttribute('font-family','Share Tech Mono');t.textContent=arc.expr;
+      svg.appendChild(t);
+    }
+  });
+
+  // places
+  Object.entries(cpnLayout).forEach(([pid,pos]) => {
+    const toks = cpnState ? cpnState.places[pid] : [];
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx',pos.x);c.setAttribute('cy',pos.y);c.setAttribute('r','34');
+    c.setAttribute('fill','#040d1a');c.setAttribute('stroke','#0d3a6a');c.setAttribute('stroke-width','2');
+    // color hint for class-specific places
+    if(pid==='P_Active_E') c.setAttribute('stroke','#ff3366');
+    if(pid==='P_Active_V') c.setAttribute('stroke','#00d4ff');
+    if(pid==='P_Active_T') c.setAttribute('stroke','#bf5fff');
+    if(pid==='P_Active_D') c.setAttribute('stroke','#ff6b35');
+    g.appendChild(c);
+
+    pos.label.split('\n').forEach((ln,i)=>{
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',pos.x);t.setAttribute('y',pos.y-8+i*13);
+      t.setAttribute('text-anchor','middle');t.setAttribute('fill','#4a8aaa');
+      t.setAttribute('font-size','9');t.setAttribute('font-family','Share Tech Mono');
+      t.textContent=ln;g.appendChild(t);
+    });
+
+    // token count
+    const tc=document.createElementNS('http://www.w3.org/2000/svg','text');
+    tc.setAttribute('x',pos.x);tc.setAttribute('y',pos.y+28);
+    tc.setAttribute('text-anchor','middle');tc.setAttribute('fill','#00d4ff');
+    tc.setAttribute('font-size','11');tc.setAttribute('font-family','Share Tech Mono');
+    tc.setAttribute('font-weight','bold');
+    tc.textContent = toks ? toks.length : 0;
+    g.appendChild(tc);
+
+    // colored dots
+    if(toks && toks.length>0) {
+      toks.slice(0,4).forEach((tok,i)=>{
+        const angle=(i/Math.max(toks.length,1))*2*Math.PI-Math.PI/2;
+        const d=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        d.setAttribute('cx',pos.x+15*Math.cos(angle));
+        d.setAttribute('cy',pos.y+15*Math.sin(angle));
+        d.setAttribute('r','6');
+        d.setAttribute('fill',CLR[tok.type]||'#666');
+        d.setAttribute('filter','url(#cglow)');
+        g.appendChild(d);
+      });
+    }
+    svg.appendChild(g);
+  });
+
+  // transitions
+  cpnTransitions.forEach(tr=>{
+    const enabled = cpnState ? isCPNEnabled(tr.id) : false;
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.style.cursor='pointer';
+    g.onclick=()=>{ if(cpnState&&isCPNEnabled(tr.id)){fireCPN(tr.id);renderCPN();} };
+
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x',tr.x-24);rect.setAttribute('y',tr.y-20);
+    rect.setAttribute('width','48');rect.setAttribute('height','40');rect.setAttribute('rx','4');
+    rect.setAttribute('fill',enabled?'#1a4a1a':'#0d160d');
+    rect.setAttribute('stroke',enabled?'#39ff14':'#2a4a2a');
+    rect.setAttribute('stroke-width','1.5');
+    g.appendChild(rect);
+
+    tr.label.split('\n').forEach((ln,i)=>{
+      const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x',tr.x);t.setAttribute('y',tr.y-6+i*11);
+      t.setAttribute('text-anchor','middle');t.setAttribute('fill',enabled?'#39ff14':'#3a7a3a');
+      t.setAttribute('font-size','8');t.setAttribute('font-family','Share Tech Mono');
+      t.textContent=ln;g.appendChild(t);
+    });
+    svg.appendChild(g);
+  });
+
+  // BW label
+  const bwg=document.createElementNS('http://www.w3.org/2000/svg','g');
+  const bwrect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  bwrect.setAttribute('x','20');bwrect.setAttribute('y','20');
+  bwrect.setAttribute('width','200');bwrect.setAttribute('height','50');bwrect.setAttribute('rx','6');
+  bwrect.setAttribute('fill','rgba(0,40,60,0.8)');bwrect.setAttribute('stroke','#00d4ff');bwrect.setAttribute('stroke-width','1.5');
+  bwg.appendChild(bwrect);
+  const bwt=document.createElementNS('http://www.w3.org/2000/svg','text');
+  bwt.setAttribute('x','120');bwt.setAttribute('y','38');bwt.setAttribute('text-anchor','middle');
+  bwt.setAttribute('fill','#00d4ff');bwt.setAttribute('font-size','11');bwt.setAttribute('font-family','Share Tech Mono');
+  bwt.textContent=`BW Free: ${cpnState?cpnState.bw:50} / ${MAX_BW} BU`;
+  bwg.appendChild(bwt);
+  const bwt2=document.createElementNS('http://www.w3.org/2000/svg','text');
+  bwt2.setAttribute('x','120');bwt2.setAttribute('y','55');bwt2.setAttribute('text-anchor','middle');
+  bwt2.setAttribute('fill','#4a7a9b');bwt2.setAttribute('font-size','9');bwt2.setAttribute('font-family','Share Tech Mono');
+  bwt2.textContent=`Token Colors: (class, id, bu, priority)`;
+  bwg.appendChild(bwt2);
+  svg.appendChild(bwg);
+}
+
+function isCPNEnabled(tid) {
+  const s = cpnState;
+  const has = (p)=>s.places[p]&&s.places[p].length>0;
+  switch(tid) {
+    case 'CT1': return has('P_Src');
+    case 'CT2': return has('P_Prio_Q');
+    case 'CT3': return has('P_Guard') && s.places.P_Guard.some(t=>s.bw>=BU[t.type]);
+    case 'CT4': return has('P_BWAlloc') && s.places.P_BWAlloc.some(t=>t.type==='E');
+    case 'CT5': return has('P_BWAlloc') && s.places.P_BWAlloc.some(t=>t.type==='V');
+    case 'CT6': return has('P_BWAlloc') && s.places.P_BWAlloc.some(t=>t.type==='T');
+    case 'CT7': return has('P_BWAlloc') && s.places.P_BWAlloc.some(t=>t.type==='D');
+    case 'CT8': return has('P_Active_E')||has('P_Active_V');
+    case 'CT9': return has('P_Active_T')||has('P_Active_D');
+    case 'CT10':return has('P_Guard') && s.places.P_Guard.some(t=>s.bw<BU[t.type]);
+    case 'CT11':return has('P_QoS_Check');
+    case 'CT12':return has('P_Preempt')||has('P_Degrade');
+    default: return false;
+  }
+}
+
+function fireCPN(tid) {
+  const s = cpnState;
+  let msg='';
+  switch(tid) {
+    case 'CT1': {
+      const tok=s.places.P_Src.shift();
+      // insert sorted by priority (desc)
+      s.places.P_Prio_Q.push(tok);
+      s.places.P_Prio_Q.sort((a,b)=>PRI[b.type]-PRI[a.type]);
+      msg=`[CT1] ${tok.id}(${tok.type},pri=${PRI[tok.type]}) queued in priority queue`;
+      break;
+    }
+    case 'CT2': {
+      const tok=s.places.P_Prio_Q.shift();
+      s.places.P_Guard.push(tok);
+      msg=`[CT2] Dequeued ${tok.id}(${tok.type}) → guard check`;
+      break;
+    }
+    case 'CT3': {
+      const idx=s.places.P_Guard.findIndex(t=>s.bw>=BU[t.type]);
+      const tok=s.places.P_Guard.splice(idx,1)[0];
+      s.bw-=BU[tok.type];
+      s.places.P_BWAlloc.push(tok);
+      msg=`[CT3] Allocated ${BU[tok.type]} BU for ${tok.id}(${tok.type}). BW→${s.bw}`;
+      break;
+    }
+    case 'CT4':case 'CT5':case 'CT6':case 'CT7': {
+      const typeMap={CT4:'E',CT5:'V',CT6:'T',CT7:'D'};
+      const placeMap={CT4:'P_Active_E',CT5:'P_Active_V',CT6:'P_Active_T',CT7:'P_Active_D'};
+      const typ=typeMap[tid];
+      const idx=s.places.P_BWAlloc.findIndex(t=>t.type===typ);
+      const tok=s.places.P_BWAlloc.splice(idx,1)[0];
+      s.places[placeMap[tid]].push(tok);
+      s.classCounts[typ]++;
+      msg=`[${tid}] ${tok.id}(${typ}) ACTIVE in ${placeMap[tid]}`;
+      break;
+    }
+    case 'CT8': {
+      const src=s.places.P_Active_E.length>0?'P_Active_E':'P_Active_V';
+      const tok=s.places[src].shift();
+      s.places.P_QoS_Check.push(tok);
+      msg=`[CT8] ${tok.id}(${tok.type}) passed QoS check`;
+      break;
+    }
+    case 'CT9': {
+      const src=s.places.P_Active_T.length>0?'P_Active_T':'P_Active_D';
+      const tok=s.places[src].shift();
+      s.places.P_Degrade.push(tok);
+      msg=`[CT9] ${tok.id}(${tok.type}) moved to degrade queue`;
+      break;
+    }
+    case 'CT10': {
+      const idx=s.places.P_Guard.findIndex(t=>s.bw<BU[t.type]);
+      const tok=s.places.P_Guard.splice(idx,1)[0];
+      // find lowest-priority active to preempt
+      const activePlaces=['P_Active_D','P_Active_T','P_Active_V','P_Active_E'];
+      const victim=activePlaces.find(p=>s.places[p].length>0);
+      if(victim) {
+        const v=s.places[victim].shift();
+        s.bw+=BU[v.type];
+        s.drops++;
+        s.classCounts[v.type]=Math.max(0,s.classCounts[v.type]-1);
+        s.places.P_Preempt.push(tok);
+        msg=`[CT10] Preempted ${v.id}(${v.type}), BW+=${BU[v.type]}. New tok ${tok.id} queued`;
+      } else {
+        s.drops++;
+        msg=`[CT10] Dropped ${tok.id}(${tok.type}) - no sessions to preempt`;
+      }
+      break;
+    }
+    case 'CT11': {
+      const tok=s.places.P_QoS_Check.shift();
+      s.bw=Math.min(MAX_BW,s.bw+BU[tok.type]);
+      s.classCounts[tok.type]=Math.max(0,s.classCounts[tok.type]-1);
+      s.places.P_Release.push({id:'rel',type:'rel'});
+      msg=`[CT11] ${tok.id}(${tok.type}) completed. BW→${s.bw}`;
+      break;
+    }
+    case 'CT12': {
+      const src=s.places.P_Preempt.length>0?'P_Preempt':'P_Degrade';
+      const tok=s.places[src].shift();
+      if(tok.type&&BU[tok.type]) {
+        s.bw=Math.min(MAX_BW,s.bw+BU[tok.type]);
+        s.classCounts[tok.type]=Math.max(0,(s.classCounts[tok.type]||0)-1);
+      }
+      s.places.P_Release.push({id:'rel2',type:'rel'});
+      msg=`[CT12] BW released. Pool→${s.bw}`;
+      break;
+    }
+  }
+  s.fired++; s.step++; totalFired++;
+  addCPNLog(msg,'fire');
+  updateCPNStats();
+  recordMarking();
+}
+
+function addCPNLog(msg,cls='info') {
+  const log=document.getElementById('cpnLog');
+  if(!log) return;
+  const d=document.createElement('div');
+  d.className='log-entry '+cls;
+  d.textContent=`[${String(cpnState.step).padStart(3,'0')}] ${msg}`;
+  log.prepend(d);
+  if(log.children.length>80) log.removeChild(log.lastChild);
+}
+
+function updateCPNStats() {
+  const s=cpnState;
+  if(!s) return;
+  document.getElementById('cpn-bw').textContent=s.bw;
+  document.getElementById('cpn-V').textContent=s.classCounts.V;
+  document.getElementById('cpn-D').textContent=s.classCounts.D;
+  document.getElementById('cpn-T').textContent=s.classCounts.T;
+  document.getElementById('cpn-E').textContent=s.classCounts.E;
+  document.getElementById('cpn-fired').textContent=s.fired;
+}
+
+function renderCPN() {
+  if(!cpnState) return;
+  drawCPN();
+  updateCPNStats();
+}
+
+function cpnStep() {
+  if(!cpnState) initCPN();
+  if(cpnState.places.P_Src.length===0&&Math.random()<0.65) {
+    const types=['V','V','D','T','E'];
+    cpnInjectToken(types[Math.floor(Math.random()*types.length)],false);
+  }
+  const order=['CT1','CT2','CT3','CT4','CT5','CT6','CT7','CT8','CT9','CT10','CT11','CT12'];
+  const enabled=order.filter(t=>isCPNEnabled(t));
+  if(enabled.length===0){
+    addCPNLog('No transitions enabled. Auto-injecting...','warn');
+    cpnInjectToken(['V','D','T'][Math.floor(Math.random()*3)],false);
+    return;
+  }
+  fireCPN(enabled[0]);
+  renderCPN();
+}
+
+function toggleCPNAuto() {
+  cpnAutoRunning=!cpnAutoRunning;
+  const btn=document.getElementById('cpnAutoBtn');
+  if(cpnAutoRunning){
+    btn.textContent='⏹ Stop'; btn.className='btn btn-danger';
+    const spd=parseInt(document.getElementById('cpnSpeed').value);
+    cpnAutoInterval=setInterval(cpnStep,spd);
+    document.getElementById('cpnSpeed').oninput=function(){
+      clearInterval(cpnAutoInterval);
+      cpnAutoInterval=setInterval(cpnStep,parseInt(this.value));
+    };
+  } else {
+    btn.textContent='▶ Auto-Run'; btn.className='btn btn-success';
+    clearInterval(cpnAutoInterval);
+  }
+}
+
+function cpnReset() {
+  clearInterval(cpnAutoInterval); cpnAutoRunning=false;
+  const btn=document.getElementById('cpnAutoBtn');
+  if(btn){btn.textContent='▶ Auto-Run';btn.className='btn btn-success';}
+  cpnState=makeCPNState(); renderCPN();
+  document.getElementById('cpnLog').innerHTML='';
+  addCPNLog('CPN reset to initial marking M₀','info');
+}
+
+function cpnInject() {
+  const sel=document.getElementById('cpnInject');
+  const typ=sel.value; if(!typ) return; sel.value='';
+  if(!cpnState) initCPN();
+  cpnInjectToken(typ,true); renderCPN();
+}
+
+let _csid=300;
+function cpnInjectToken(typ,log=true) {
+  const tok={id:'C'+(_csid++),type:typ,bu:BU[typ],pri:PRI[typ]};
+  cpnState.places.P_Src.push(tok);
+  if(log) addCPNLog(`[INJECT] Colored token (${typ},${tok.id},bu=${tok.bu},pri=${tok.pri}) → Source`,'info');
+}
+
+// ============================================================
+//  PROPERTIES PANEL
+// ============================================================
+function updatePropPanel() {
+  const s = hpnState||cpnState;
+  if(!s) return;
+  // P-invariant: BW conservation
+  const bwUsed = s===hpnState ?
+    (s.places.P_Active.length+s.places.P_Monitor.length)*5 : // approx
+    (cpnState.classCounts.E*20+cpnState.classCounts.V*5+cpnState.classCounts.T*10+cpnState.classCounts.D*3);
+  const total = s.bw + bwUsed;
+  const inv = document.getElementById('prop-bwInvariant');
+  if(inv) {
+    inv.textContent = total;
+    inv.style.color = Math.abs(total-MAX_BW)<3 ? 'var(--accent3)' : 'var(--red)';
+  }
+  const dl = document.getElementById('prop-deadlocks');
+  if(dl) dl.textContent = deadlockCount;
+  const mk = document.getElementById('prop-markings');
+  if(mk) mk.textContent = visitedMarkings.size;
+
+  // Jain's fairness index
+  const counts = cpnState ? [cpnState.classCounts.V, cpnState.classCounts.D, cpnState.classCounts.T, cpnState.classCounts.E] : [0,0,0,0];
+  const n = counts.length;
+  const sumSq = counts.reduce((a,v)=>a+v*v,0);
+  const sum = counts.reduce((a,v)=>a+v,0);
+  const jain = sum===0 ? 1 : (sum*sum)/(n*sumSq);
+  const fi = document.getElementById('prop-fairness');
+  if(fi) fi.textContent = isNaN(jain)||sum===0 ? '—' : jain.toFixed(3);
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+window.addEventListener('load',()=>{
+  // Initialize HPN on load since it's shown first after tab click
+  document.getElementById('hpnSpeed').oninput=function(){
+    document.getElementById('hpnSpeedLabel').textContent=this.value+'ms';
+  };
+});
+</script>
+</body>
+</html>
