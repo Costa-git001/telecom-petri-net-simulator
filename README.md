@@ -2,7 +2,7 @@
 
 > An interactive, browser-based Petri Net simulator modelling **Call Handling, Bandwidth Allocation, and Traffic Class Prioritization** in a Next-Generation Telecommunications Core Network.
 
-Built as part of coursework for **ICS 2313 – Software Testing & Quality Assurance** at [Jomo Kenyatta University of Agriculture and Technology (JKUAT)](https://www.jkuat.ac.ke/).
+Built as part of coursework for **ICS 2313 – Formal Methods in Software Engineering at [Jomo Kenyatta University of Agriculture and Technology (JKUAT)](https://www.jkuat.ac.ke/).
 
 ---
 
